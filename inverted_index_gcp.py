@@ -21,35 +21,41 @@ from graphframes import *
 from pyspark.sql.functions import col
 
 PROJECT_ID = 'YOUR-PROJECT-ID-HERE'
+
+
 def get_bucket(bucket_name):
     return storage.Client(PROJECT_ID).bucket(bucket_name)
+
 
 def _open(path, mode, bucket=None):
     if bucket is None:
         return open(path, mode)
     return bucket.blob(path).open(mode)
 
-# Let's start with a small block size of 30 bytes just to test things out. 
+
+# Let's start with a small block size of 30 bytes just to test things out.
 BLOCK_SIZE = 1999998
+
 
 class MultiFileWriter:
     """ Sequential binary writer to multiple files of up to BLOCK_SIZE each. """
+
     def __init__(self, base_dir, name, bucket_name=None):
         self._base_dir = Path(base_dir)
         self._name = name
         self._bucket = None if bucket_name is None else get_bucket(bucket_name)
-        self._file_gen = (_open(str(self._base_dir / f'{name}_{i:03}.bin'), 
-                                'wb', self._bucket) 
+        self._file_gen = (_open(str(self._base_dir / f'{name}_{i:03}.bin'),
+                                'wb', self._bucket)
                           for i in itertools.count())
         self._f = next(self._file_gen)
-           
+
     def write(self, b):
         locs = []
         while len(b) > 0:
             pos = self._f.tell()
             remaining = BLOCK_SIZE - pos
             # if the current file is full, close and open a new one.
-            if remaining == 0:  
+            if remaining == 0:
                 self._f.close()
                 self._f = next(self._file_gen)
                 pos, remaining = 0, BLOCK_SIZE
@@ -62,8 +68,10 @@ class MultiFileWriter:
     def close(self):
         self._f.close()
 
+
 class MultiFileReader:
     """ Sequential binary reader of multiple files of up to BLOCK_SIZE each. """
+
     def __init__(self, base_dir, bucket_name=None):
         self._base_dir = Path(base_dir)
         self._bucket = None if bucket_name is None else get_bucket(bucket_name)
@@ -81,29 +89,28 @@ class MultiFileReader:
             b.append(f.read(n_read))
             n_bytes -= n_read
         return b''.join(b)
-  
+
     def close(self):
         for f in self._open_files.values():
             f.close()
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.close()
-        return False 
-
-TUPLE_SIZE = 6       # We're going to pack the doc_id and tf values in this 
-                     # many bytes.
-TF_MASK = 2 ** 16 - 1 # Masking the 16 low bits of an integer
+        return False
 
 
-class InvertedIndex:  
-    def __init__(self, docs={}):
+TUPLE_SIZE = 6  # We're going to pack the doc_id and tf values in this
+# many bytes.
+TF_MASK = 2 ** 16 - 1  # Masking the 16 low bits of an integer
+
+
+class InvertedIndex:
+    def __init__(self, docs={}, pages=None):
         """ Initializes the inverted index and add documents to it (if provided).
         Parameters:
         -----------
           docs: dict mapping doc_id to list of tokens
         """
-        # add a porter stemmer
-        self.stemmer = PorterStemmer()
         # stores document frequency per term
         self.df = Counter()
         # stores total frequency per term
@@ -119,6 +126,8 @@ class InvertedIndex:
         # the number of bytes from the beginning of the file where the posting list
         # starts. 
         self.posting_locs = defaultdict(list)
+        # store document length
+        self.doc_len = {}
 
         for doc_id, tokens in docs.items():
             self.add_doc(doc_id, tokens)
@@ -129,8 +138,17 @@ class InvertedIndex:
         # calculate tf-idf for each term in the index and store
         self.tf_idf = self.calculate_tf_idf(idf)
 
-        # store page rank, right now it None
-        self.pr = None
+        # store page rank
+        if pages is not None:
+            self.pr = self.generate_graph(pages)
+        else:
+            self.pr = None
+
+
+
+        #self.doc_per_term = self.calculate_doc_per_term()
+        # write index to disk
+        # self.write_index('.', 'index')
 
     def add_doc(self, doc_id, tokens):
         """ Adds a document to the index with a given `doc_id` and tokens. It counts
@@ -138,10 +156,12 @@ class InvertedIndex:
             side-effects).
         """
         # remove stopwords without stemming
-        tokens = self.filter_tokens(tokens)
+        #tokens = self.filter_tokens(tokens)
         # remove stopwords and stem the tokens
-        #tokens = self.filter_tokens(tokens, is_stem=True)
+        tokens = self.filter_tokens(tokens, is_stem=True)
         w2cnt = Counter(tokens)
+        # add the document length to the dictionary
+        self.doc_len[doc_id] = len(tokens)
         self.term_total.update(w2cnt)
         for w, cnt in w2cnt.items():
             self.df[w] = self.df.get(w, 0) + 1
@@ -177,8 +197,8 @@ class InvertedIndex:
                 b = reader.read(locs, self.df[w] * TUPLE_SIZE)
                 posting_list = []
                 for i in range(self.df[w]):
-                    doc_id = int.from_bytes(b[i*TUPLE_SIZE:i*TUPLE_SIZE+4], 'big')
-                    tf = int.from_bytes(b[i*TUPLE_SIZE+4:(i+1)*TUPLE_SIZE], 'big')
+                    doc_id = int.from_bytes(b[i * TUPLE_SIZE:i * TUPLE_SIZE + 4], 'big')
+                    tf = int.from_bytes(b[i * TUPLE_SIZE + 4:(i + 1) * TUPLE_SIZE], 'big')
                     posting_list.append((doc_id, tf))
                 yield w, posting_list
 
@@ -190,8 +210,8 @@ class InvertedIndex:
             locs = self.posting_locs[w]
             b = reader.read(locs, self.df[w] * TUPLE_SIZE)
             for i in range(self.df[w]):
-                doc_id = int.from_bytes(b[i*TUPLE_SIZE:i*TUPLE_SIZE+4], 'big')
-                tf = int.from_bytes(b[i*TUPLE_SIZE+4:(i+1)*TUPLE_SIZE], 'big')
+                doc_id = int.from_bytes(b[i * TUPLE_SIZE:i * TUPLE_SIZE + 4], 'big')
+                tf = int.from_bytes(b[i * TUPLE_SIZE + 4:(i + 1) * TUPLE_SIZE], 'big')
                 posting_list.append((doc_id, tf))
         return posting_list
 
@@ -199,9 +219,9 @@ class InvertedIndex:
     def write_a_posting_list(b_w_pl, base_dir, bucket_name=None):
         posting_locs = defaultdict(list)
         bucket_id, list_w_pl = b_w_pl
-        
+
         with closing(MultiFileWriter(base_dir, bucket_id, bucket_name)) as writer:
-            for w, pl in list_w_pl: 
+            for w, pl in list_w_pl:
                 # convert to bytes
                 b = b''.join([(doc_id << 16 | (tf & TF_MASK)).to_bytes(TUPLE_SIZE, 'big')
                               for doc_id, tf in pl])
@@ -215,7 +235,6 @@ class InvertedIndex:
                 pickle.dump(posting_locs, f)
         return bucket_id
 
-
     @staticmethod
     def read_index(base_dir, name, bucket_name=None):
         path = str(Path(base_dir) / f'{name}.pkl')
@@ -223,19 +242,21 @@ class InvertedIndex:
         with _open(path, 'rb', bucket) as f:
             return pickle.load(f)
 
-
-    def filter_tokens(self, tokens, is_stem=False):
+    @staticmethod
+    def filter_tokens(tokens, is_stem=False):
         """ Remove stopwords and stem the tokens. function takes in a list of tokens, and removes stop words from list of tokens."""
         # create list of stop words
         english_stopwords = frozenset(stopwords.words('english'))
         corpus_stopwords = ['category', 'references', 'also', 'links', 'extenal', 'see', 'thumb']
         all_stopwords = english_stopwords.union(corpus_stopwords)
+        # add a porter stemmer
+        stemmer = PorterStemmer()
         # if not stemming, remove stop words
         if not is_stem:
             tokens = [t for t in tokens if t not in all_stopwords]
         else:
             # if stemming, stem the tokens
-            tokens = [self.stemmer.stem(t) for t in tokens if t not in all_stopwords]
+            tokens = [stemmer.stem(t) for t in tokens if t not in all_stopwords]
         return tokens
 
     def calculate_tf_idf(self, idf):
@@ -278,4 +299,20 @@ class InvertedIndex:
         g = GraphFrame(verticesDF, edgesDF)
         pr_results = g.pageRank(resetProbability=0.15, maxIter=10)
         pr = pr_results.vertices.select("id", "pagerank")
-        self.pr = pr.sort(col('pagerank').desc())
+        pr = pr.sort(col('pagerank').desc())
+        rows = pr.collect()
+        return {row['id']: row['pagerank'] for row in rows}
+
+    def calculate_doc_per_term(self):
+        # iterate all terms in posting list
+        doc_per_term = {}
+        for term, pl in self._posting_list.items():
+            # get all doc_ids for term
+            doc_ids = [doc_id for doc_id, tf in pl]
+            # for each doc_id, check if it is in the dictionary
+            # if not, create empty list for the doc_id and add the term to the list
+            for doc_id in doc_ids:
+                if doc_id not in doc_per_term:
+                    doc_per_term[doc_id] = []
+                doc_per_term[doc_id].append(term)
+        return doc_per_term
