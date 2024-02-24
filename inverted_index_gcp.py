@@ -144,9 +144,9 @@ class InvertedIndex:
         else:
             self.pr = None
 
+        self.doc_tfidf_sqr = self.calculate_doc_tfidf()
 
-
-        #self.doc_per_term = self.calculate_doc_per_term()
+        # self.doc_per_term = self.calculate_doc_per_term()
         # write index to disk
         # self.write_index('.', 'index')
 
@@ -156,7 +156,7 @@ class InvertedIndex:
             side-effects).
         """
         # remove stopwords without stemming
-        #tokens = self.filter_tokens(tokens)
+        # tokens = self.filter_tokens(tokens)
         # remove stopwords and stem the tokens
         tokens = self.filter_tokens(tokens, is_stem=True)
         w2cnt = Counter(tokens)
@@ -316,3 +316,12 @@ class InvertedIndex:
                     doc_per_term[doc_id] = []
                 doc_per_term[doc_id].append(term)
         return doc_per_term
+
+    def calculate_doc_tfidf(self):
+        doc_size_before_sqrt = {}
+        for term, term_tf_idf_list in self.tf_idf.items():
+            for doc_id, tf_idf in term_tf_idf_list:
+                if doc_id not in doc_size_before_sqrt:
+                    doc_size_before_sqrt[doc_id] = 0
+                doc_size_before_sqrt[doc_id] += tf_idf ** 2
+        return doc_size_before_sqrt

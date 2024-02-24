@@ -67,13 +67,12 @@ class searchEngine:
                     # append the tf-idf to the list of vectors for the doc
                     docs_vectors[doc_id].append(tf_idf[1])
                 else:
+                    if doc_id not in docs_vectors:
+                        docs_vectors[doc_id] = []
                     # if the term is not in the doc, append 0 to the list of vectors for the doc
                     docs_vectors[doc_id].append(0)
         # return the vectors of the docs
         return docs_vectors
-
-
-
 
     """Similarity and Ranking"""
     # TODO: add bm25 method
@@ -86,16 +85,11 @@ class searchEngine:
                 dot_product += vector[i] * query_vector[i]
             cosine_sim_docs[doc] = dot_product
 
-        doc_size_before_sqrt = {}
-        for term in query_terms:
-            pl = self.index._posting_list.get(term, [])
-            for doc_id, tf in pl:
-                if doc_id not in doc_size_before_sqrt:
-                    doc_size_before_sqrt[doc_id] = 0
-                doc_size_before_sqrt[doc_id] += tf**2
-
         for doc_id in cosine_sim_docs:
-            cosine_sim_docs[doc_id] = cosine_sim_docs[doc_id] / (np.sqrt(doc_size_before_sqrt[doc_id]) * np.sqrt(np.sum(np.array(query_vector)**2)))
+            # divide by the total sqr of the documents tf-idf
+            # cosine_sim_docs[doc_id] = cosine_sim_docs[doc_id] / (np.sqrt(self.index.doc_tfidf_sqr.get(doc_id)) * np.sqrt(np.sum(np.array(query_vector)**2)))
+            #divide by the length of the document
+            cosine_sim_docs[doc_id] = cosine_sim_docs[doc_id] / (np.sqrt(self.index.doc_len.get(doc_id)) * np.sqrt(np.sum(np.array(query_vector)**2)))
         return cosine_sim_docs
 
     def dotProduct_sim(query_vector, docs_vector):
