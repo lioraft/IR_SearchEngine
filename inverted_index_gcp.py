@@ -17,7 +17,7 @@ from google.cloud import storage
 from collections import defaultdict
 from contextlib import closing
 import pyspark
-from graphframes import *
+# from graphframes import *
 from pyspark.sql.functions import col
 
 PROJECT_ID = 'YOUR-PROJECT-ID-HERE'
@@ -180,6 +180,8 @@ class InvertedIndex:
         with _open(path, 'wb', bucket) as f:
             pickle.dump(self, f)
 
+
+
     def __getstate__(self):
         """ Modify how the object is pickled by removing the internal posting lists
             from the object's state dictionary. 
@@ -325,3 +327,4 @@ class InvertedIndex:
                     doc_size_before_sqrt[doc_id] = 0
                 doc_size_before_sqrt[doc_id] += tf_idf ** 2
         return doc_size_before_sqrt
+
