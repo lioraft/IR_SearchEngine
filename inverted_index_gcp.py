@@ -13,18 +13,23 @@ import pickle
 import nltk
 from nltk.stem.porter import *
 from nltk.corpus import stopwords
-from google.cloud import storage
+#from google.cloud import storage
 from collections import defaultdict
 from contextlib import closing
-import pyspark
-from graphframes import *
-from pyspark.sql.functions import col
 
 PROJECT_ID = 'YOUR-PROJECT-ID-HERE'
 
+'''
+we barely use this file, but it's here for reference
+we only used empty constructor of inverted index and then we used our
+own methods to load the index from disk and write it to disk
+the methods of inverted index were initially written here, but then
+we modified them to work with spark in GCP and used them there
+'''
 
 def get_bucket(bucket_name):
-    return storage.Client(PROJECT_ID).bucket(bucket_name)
+    return None
+#     return storage.Client(PROJECT_ID).bucket(bucket_name)
 
 
 def _open(path, mode, bucket=None):
@@ -105,7 +110,7 @@ TF_MASK = 2 ** 16 - 1  # Masking the 16 low bits of an integer
 
 
 class InvertedIndex:
-    def __init__(self, docs={}, pages=None):
+    def __init__(self, docs={}):
         """ Initializes the inverted index and add documents to it (if provided).
         Parameters:
         -----------
@@ -126,39 +131,38 @@ class InvertedIndex:
         # the number of bytes from the beginning of the file where the posting list
         # starts. 
         self.posting_locs = defaultdict(list)
-        # store document length
+        # store document length (number of tokens) for each document
         self.doc_len = {}
 
-        for doc_id, tokens in docs.items():
-            self.add_doc(doc_id, tokens)
+        # for each doc, add doc_id and tokens to the index
+        for doc, tokens in docs.items():
+            self.add_doc((doc, tokens))
 
-        # after building index, store idf per term. a dictionary mapping term to its idf
-        idf = {term: math.log(len(docs.keys()) / df) for term, df in self.df.items()}
+        # store tf-idf for each term-document pair in the index
+        self.tf_idf = None
 
-        # calculate tf-idf for each term in the index and store
-        self.tf_idf = self.calculate_tf_idf(idf)
+        # store the root of square sums of tf for each document for cosine similarity
+        self.doc_vector_sqr = None
 
-        # store page rank
-        if pages is not None:
-            self.pr = self.generate_graph(pages)
-        else:
-            self.pr = None
+        # store page rank for each document
+        self.pr = None
 
-        self.doc_tfidf_sqr = self.calculate_doc_tfidf()
-
-        # self.doc_per_term = self.calculate_doc_per_term()
-        # write index to disk
-        # self.write_index('.', 'index')
-
-    def add_doc(self, doc_id, tokens):
+    def add_doc(self, doc, is_stem=True):
         """ Adds a document to the index with a given `doc_id` and tokens. It counts
             the tf of tokens, then update the index (in memory, no storage 
             side-effects).
+        Parameters:
+        -----------
+          doc: tuple of (int, str)
+          int is doc id, string is the tokens in the document.
+          is_stem: bool
+            If True, stem the tokens.
         """
+        doc_id, tokens = doc
         # remove stopwords without stemming
         # tokens = self.filter_tokens(tokens)
         # remove stopwords and stem the tokens
-        tokens = self.filter_tokens(tokens, is_stem=True)
+        tokens = self.filter_tokens(tokens, is_stem)
         w2cnt = Counter(tokens)
         # add the document length to the dictionary
         self.doc_len[doc_id] = len(tokens)
@@ -244,7 +248,16 @@ class InvertedIndex:
 
     @staticmethod
     def filter_tokens(tokens, is_stem=False):
-        """ Remove stopwords and stem the tokens. function takes in a list of tokens, and removes stop words from list of tokens."""
+        """ Remove stopwords and stem the tokens. function takes in a string of tokens,
+        and removes stop words from list of tokens. if is_stem is True, it also stems the tokens.
+
+        parameters:
+        -----------
+          tokens: str
+            tokens to be filtered
+          is_stem: bool
+            if True, stem the tokens using a porter stemmer
+        """
         # create list of stop words
         english_stopwords = frozenset(stopwords.words('english'))
         corpus_stopwords = ['category', 'references', 'also', 'links', 'extenal', 'see', 'thumb']
@@ -253,57 +266,75 @@ class InvertedIndex:
         stemmer = PorterStemmer()
         # if not stemming, remove stop words
         if not is_stem:
-            tokens = [t for t in tokens if t not in all_stopwords]
+            tokens = [str(t) for t in tokens if t not in all_stopwords]
         else:
             # if stemming, stem the tokens
-            tokens = [stemmer.stem(t) for t in tokens if t not in all_stopwords]
+            tokens = [stemmer.stem(str(t)) for t in tokens if t not in all_stopwords]
         return tokens
 
     def calculate_tf_idf(self, idf):
         """Calculate TF-IDF for each term in a document and returns a dictionary where keys are terms,
-        and values is list of tuples where each tuple consists of (doc_id, tf-idf)."""
+        and values is list of tuples where each tuple consists of (doc_id, tf-idf).
+        Parameters:
+        -----------
+            idf: dict
+                dictionary mapping term to its idf
+        Returns:
+        --------
+            tf_idf: dict
+                dictionary mapping term to list of tuples where each tuple consists of (doc_id, tf-idf)
+            """
         tf_idf = defaultdict(list)
         for term, pl in self._posting_list.items():
             for doc_id, tf in pl:
                 tf_idf[term].append((doc_id, tf * idf[term]))
         return tf_idf
 
-    def generate_graph(self, pages):
-        ''' Compute the directed graph generated by wiki links.
-        Parameters:
-        -----------
-          pages: RDD
-            An RDD where each row consists of one wikipedia articles with 'id' and
-            'anchor_text'.
-        Returns:
-        --------
-          edges: RDD
-            An RDD where each row represents an edge in the directed graph created by
-            the wikipedia links. The first entry should the source page id and the
-            second entry is the destination page id. No duplicates should be present.
-          vertices: RDD
-            An RDD where each row represents a vetrix (node) in the directed graph
-            created by the wikipedia links. No duplicates should be present.
-        '''
-        # extract source page id and destination page ids from each row
-        edges = pages.flatMap(lambda row: [(row.id, link.id) for link in row.anchor_text])
-        # remove duplicates from edges RDD
-        edges = edges.distinct()
-        # extract unique vertices from both source and destination ids
-        vertices_source = edges.map(lambda edge: edge[0])
-        vertices_dest = edges.map(lambda edge: edge[1])
-        # combine source and destination vertices and remove duplicates
-        vertices = (vertices_source.union(vertices_dest).distinct()).map(lambda x: (x,))
-        edgesDF = edges.toDF(['src', 'dst']).repartition(4, 'src')
-        verticesDF = vertices.toDF(['id']).repartition(4, 'id')
-        g = GraphFrame(verticesDF, edgesDF)
-        pr_results = g.pageRank(resetProbability=0.15, maxIter=10)
-        pr = pr_results.vertices.select("id", "pagerank")
-        pr = pr.sort(col('pagerank').desc())
-        rows = pr.collect()
-        return {row['id']: row['pagerank'] for row in rows}
+    # def generate_graph(self, pages):
+    #     ''' Compute the directed graph generated by wiki links.
+    #     Parameters:
+    #     -----------
+    #       pages: RDD
+    #         An RDD where each row consists of one wikipedia articles with 'id' and
+    #         'anchor_text'.
+    #     Returns:
+    #     --------
+    #       edges: RDD
+    #         An RDD where each row represents an edge in the directed graph created by
+    #         the wikipedia links. The first entry should the source page id and the
+    #         second entry is the destination page id. No duplicates should be present.
+    #       vertices: RDD
+    #         An RDD where each row represents a vetrix (node) in the directed graph
+    #         created by the wikipedia links. No duplicates should be present.
+    #     '''
+    #     # extract source page id and destination page ids from each row
+    #     edges = pages.flatMap(lambda row: [(row.id, link.id) for link in row.anchor_text])
+    #     # remove duplicates from edges RDD
+    #     edges = edges.distinct()
+    #     # extract unique vertices from both source and destination ids
+    #     vertices_source = edges.map(lambda edge: edge[0])
+    #     vertices_dest = edges.map(lambda edge: edge[1])
+    #     # combine source and destination vertices and remove duplicates
+    #     vertices = (vertices_source.union(vertices_dest).distinct()).map(lambda x: (x,))
+    #     edgesDF = edges.toDF(['src', 'dst']).repartition(4, 'src')
+    #     verticesDF = vertices.toDF(['id']).repartition(4, 'id')
+    #     g = GraphFrame(verticesDF, edgesDF)
+    #     pr_results = g.pageRank(resetProbability=0.15, maxIter=10)
+    #     pr = pr_results.vertices.select("id", "pagerank")
+    #     pr = pr.sort(col('pagerank').desc())
+    #     return pr
+    #     # if you want to return a dictionary, but this is not necessary because
+    #     # the result is already sorted and it's usually large
+    #     #rows = pr.collect()
+    #     #return {row['id']: row['pagerank'] for row in rows}
 
     def calculate_doc_per_term(self):
+        ''' Calculate the number of documents that each term appears in.
+        Returns:
+        --------
+            doc_per_term: dict
+                dictionary mapping doc_id to list of terms
+        '''
         # iterate all terms in posting list
         doc_per_term = {}
         for term, pl in self._posting_list.items():
@@ -318,6 +349,12 @@ class InvertedIndex:
         return doc_per_term
 
     def calculate_doc_tfidf(self):
+        ''' Calculate the square of the tf-idf for each document.
+        Returns:
+        --------
+            doc_size_before_sqrt: dict
+                dictionary mapping doc_id to the square of the tf-idf
+        '''
         doc_size_before_sqrt = {}
         for term, term_tf_idf_list in self.tf_idf.items():
             for doc_id, tf_idf in term_tf_idf_list:
@@ -325,3 +362,4 @@ class InvertedIndex:
                     doc_size_before_sqrt[doc_id] = 0
                 doc_size_before_sqrt[doc_id] += tf_idf ** 2
         return doc_size_before_sqrt
+
