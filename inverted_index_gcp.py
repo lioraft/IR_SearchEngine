@@ -1,16 +1,7 @@
-import math
-import sys
-from collections import Counter, OrderedDict
+from collections import Counter
 import itertools
-from itertools import islice, count, groupby
-import pandas as pd
-import os
-import re
-from operator import itemgetter
-from time import time
 from pathlib import Path
 import pickle
-import nltk
 from nltk.stem.porter import *
 from nltk.corpus import stopwords
 from google.cloud import storage
@@ -20,11 +11,22 @@ import pyspark
 # from graphframes import *
 from pyspark.sql.functions import col
 
-PROJECT_ID = 'YOUR-PROJECT-ID-HERE'
+PROJECT_ID = 'assignment3-413720'
+# create list of stop words
+english_stopwords = frozenset(stopwords.words('english'))
+corpus_stopwords = ['category', 'references', 'also', 'links', 'extenal', 'see', 'thumb']
+all_stopwords = english_stopwords.union(corpus_stopwords)
 
+'''
+we barely use this file, but it's here for reference
+we only used empty constructor of inverted index and then we used our
+own methods to load the index from disk and write it to disk
+the methods of inverted index were initially written here, but then
+we modified them to work with spark in GCP and used them there
+'''
 
 def get_bucket(bucket_name):
-    return storage.Client(PROJECT_ID).bucket(bucket_name)
+    return storage.Client(project=PROJECT_ID).bucket(bucket_name)
 
 
 def _open(path, mode, bucket=None):
@@ -80,7 +82,7 @@ class MultiFileReader:
     def read(self, locs, n_bytes):
         b = []
         for f_name, offset in locs:
-            f_name = str(self._base_dir / f_name)
+            f_name = str(self._base_dir) + "/" + f_name
             if f_name not in self._open_files:
                 self._open_files[f_name] = _open(f_name, 'rb', self._bucket)
             f = self._open_files[f_name]
@@ -105,16 +107,14 @@ TF_MASK = 2 ** 16 - 1  # Masking the 16 low bits of an integer
 
 
 class InvertedIndex:
-    def __init__(self, docs={}, pages=None):
-        """ Initializes the inverted index and add documents to it (if provided).
-        Parameters:
-        -----------
-          docs: dict mapping doc_id to list of tokens
+    def __init__(self):
+        """ Initializes empty inverted index. we decided to build the index in place by loading the objects from bucket.
         """
+        ##### RELATED TO TEXT PROCESSING #####
         # stores document frequency per term
         self.df = Counter()
-        # stores total frequency per term
-        self.term_total = Counter()
+        # stores total frequency per term, we're not using it
+        # self.term_total = Counter()
         # stores posting list per term while building the index (internally), 
         # otherwise too big to store in memory.
         self._posting_list = defaultdict(list)
@@ -126,39 +126,39 @@ class InvertedIndex:
         # the number of bytes from the beginning of the file where the posting list
         # starts. 
         self.posting_locs = defaultdict(list)
-        # store document length
+        # store document length (number of tokens) for each document
         self.doc_len = {}
+        # store the root of square sums of tf for each document for cosine similarity
+        self.doc_vector_sqr = None
+        # store page rank for each document
+        self.pr = None
+        # store idf for each term in the index
+        self.idf = None
+        # avg doc len
+        self.avg_doc_len = None
 
-        for doc_id, tokens in docs.items():
-            self.add_doc(doc_id, tokens)
+        #### RELATED TO TITLE PROCESSING ####
+        # store tf-idf of titles for each term-document pair in the index
+        self.tf_idf_title = None
+        # store the root of square sums of tf for each document for cosine similarity
+        self.doc_vector_sqr_title = None
 
-        # after building index, store idf per term. a dictionary mapping term to its idf
-        idf = {term: math.log(len(docs.keys()) / df) for term, df in self.df.items()}
-
-        # calculate tf-idf for each term in the index and store
-        self.tf_idf = self.calculate_tf_idf(idf)
-
-        # store page rank
-        if pages is not None:
-            self.pr = self.generate_graph(pages)
-        else:
-            self.pr = None
-
-        self.doc_tfidf_sqr = self.calculate_doc_tfidf()
-
-        # self.doc_per_term = self.calculate_doc_per_term()
-        # write index to disk
-        # self.write_index('.', 'index')
-
-    def add_doc(self, doc_id, tokens):
+    def add_doc(self, doc, is_stem=True):
         """ Adds a document to the index with a given `doc_id` and tokens. It counts
             the tf of tokens, then update the index (in memory, no storage 
             side-effects).
+        Parameters:
+        -----------
+          doc: tuple of (int, str)
+          int is doc id, string is the tokens in the document.
+          is_stem: bool
+            If True, stem the tokens.
         """
+        doc_id, tokens = doc
         # remove stopwords without stemming
         # tokens = self.filter_tokens(tokens)
         # remove stopwords and stem the tokens
-        tokens = self.filter_tokens(tokens, is_stem=True)
+        tokens = self.filter_tokens(tokens, is_stem)
         w2cnt = Counter(tokens)
         # add the document length to the dictionary
         self.doc_len[doc_id] = len(tokens)
@@ -246,21 +246,30 @@ class InvertedIndex:
 
     @staticmethod
     def filter_tokens(tokens, is_stem=False):
-        """ Remove stopwords and stem the tokens. function takes in a list of tokens, and removes stop words from list of tokens."""
-        # create list of stop words
-        english_stopwords = frozenset(stopwords.words('english'))
-        corpus_stopwords = ['category', 'references', 'also', 'links', 'extenal', 'see', 'thumb']
-        all_stopwords = english_stopwords.union(corpus_stopwords)
+        """ Remove stopwords and stem the tokens. function takes in a string of tokens,
+        and removes stop words from list of tokens. if is_stem is True, it also stems the tokens.
+
+        parameters:
+        -----------
+          tokens: str
+            tokens to be filtered
+          is_stem: bool
+            if True, stem the tokens using a porter stemmer
+        """
         # add a porter stemmer
         stemmer = PorterStemmer()
         # if not stemming, remove stop words
         if not is_stem:
-            tokens = [t for t in tokens if t not in all_stopwords]
+            tokens = [str(t) for t in tokens if t not in all_stopwords]
         else:
             # if stemming, stem the tokens
-            tokens = [stemmer.stem(t) for t in tokens if t not in all_stopwords]
+            tokens = [stemmer.stem(str(t)) for t in tokens if t not in all_stopwords]
         return tokens
 
+    @staticmethod
+    def isStopWord(token):
+        return token in all_stopwords
+      
     def calculate_tf_idf(self, idf):
         """Calculate TF-IDF for each term in a document and returns a dictionary where keys are terms,
         and values is list of tuples where each tuple consists of (doc_id, tf-idf)."""

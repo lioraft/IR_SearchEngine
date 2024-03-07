@@ -1,0 +1,31 @@
+query,duration,rq,precision@5,precision@10,precision@30,average precision,f1@30,recall@5,recall@10,recall@30
+genetics,20.04218053817749,0.166,0.4,0.4,0.133,0.618,0.105,0.043,0.087,0.087
+Who is considered the "Father of the United States"?,Timeout,None,None,None,None,None,None,None,None,None
+economic,6.344666957855225,0.207,0.6,0.5,0.167,0.659,0.125,0.06,0.1,0.1
+When was the United Nations founded?,31.67100167274475,0.0,0.0,0.0,0.033,0.033,0.026,0.0,0.0,0.022
+video gaming,19.523592472076416,0.0,0.0,0.1,0.033,0.167,0.026,0.0,0.022,0.022
+3D printing technology,5.860579252243042,0.0,0.0,0.0,0.033,0.062,0.027,0.0,0.0,0.023
+Who is the author of "1984"?,19.11513876914978,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+bioinformatics,4.982022285461426,0.152,0.2,0.2,0.1,0.462,0.122,0.053,0.105,0.158
+Who is known for proposing the heliocentric model of the solar system?,Timeout,None,None,None,None,None,None,None,None,None
+Describe the process of water erosion.,32.39621639251709,0.174,0.2,0.4,0.2,0.473,0.154,0.021,0.083,0.125
+When was the Berlin Wall constructed?,17.9820659160614,0.0,0.0,0.1,0.067,0.139,0.051,0.0,0.02,0.041
+What is the meaning of the term "Habeas Corpus"?,17.319764137268066,0.081,0.2,0.1,0.067,0.591,0.051,0.02,0.02,0.041
+telecommunications,6.309274435043335,0.122,0.4,0.2,0.067,0.833,0.072,0.077,0.077,0.077
+internet,7.000663995742798,0.117,0.2,0.2,0.1,0.516,0.083,0.024,0.048,0.071
+What are the characteristics of a chemical element?,6.618484258651733,0.0,0.0,0.0,0.033,0.037,0.025,0.0,0.0,0.02
+Describe the structure of a plant cell.,12.952347755432129,0.0,0.0,0.1,0.067,0.146,0.051,0.0,0.02,0.041
+Who painted "Starry Night"?,15.009922742843628,0.0,0.0,0.0,0.067,0.06,0.064,0.0,0.0,0.061
+computer,8.674537897109985,0.138,0.2,0.2,0.133,0.426,0.105,0.022,0.043,0.087
+What is the structure of the Earth's layers?,7.956439971923828,0.0,0.0,0.1,0.033,0.125,0.027,0.0,0.023,0.023
+When did World War II end?,Timeout,None,None,None,None,None,None,None,None,None
+When was the Gutenberg printing press invented?,31.021639823913574,0.138,0.2,0.1,0.133,0.187,0.105,0.022,0.022,0.087
+medicine,12.856786251068115,0.253,0.6,0.3,0.2,0.498,0.16,0.067,0.067,0.133
+Describe the water cycle.,10.956968069076538,0.112,0.2,0.2,0.1,0.215,0.078,0.021,0.043,0.064
+artificial intelligence,6.475586175918579,0.116,0.2,0.1,0.1,0.152,0.082,0.023,0.023,0.07
+physics,7.77485990524292,0.113,0.2,0.2,0.1,0.477,0.079,0.022,0.043,0.065
+nanotechnology,5.313060998916626,0.572,0.6,0.8,0.7,0.794,0.546,0.064,0.17,0.447
+When did the Black Death pandemic occur?,27.860244035720825,0.083,0.2,0.2,0.067,0.667,0.052,0.021,0.043,0.043
+neuroscience,5.93813157081604,0.42,0.4,0.2,0.567,0.535,0.442,0.043,0.043,0.362
+snowboard,8.952234506607056,0.473,0.6,0.5,0.3,0.65,0.391,0.188,0.312,0.562
+Who is the founder of modern psychology?,18.137688875198364,0.081,0.2,0.1,0.067,0.188,0.051,0.02,0.02,0.041

@@ -1,4 +1,6 @@
 from flask import Flask, request, jsonify
+from search_Engine import searchEngine
+
 
 class MyFlaskApp(Flask):
     def run(self, host=None, port=None, debug=None, **options):
@@ -6,6 +8,10 @@ class MyFlaskApp(Flask):
 
 app = MyFlaskApp(__name__)
 app.config['JSONIFY_PRETTYPRINT_REGULAR'] = False
+# ngrok auth: 2Qbvk2ogatpag9ES6MdMZWnyZfO_SgRoJpv1e7rxkaedjyTG
+# ngrok https url https://8fff-46-117-197-32.ngrok-free.app/
+# initialize new search engine
+searchEngine = searchEngine()
 
 
 @app.route("/search")
@@ -30,9 +36,11 @@ def search():
     query = request.args.get('query', '')
     if len(query) == 0:
       return jsonify(res)
-    # BEGIN SOLUTION
-
-    # END SOLUTION
+    res = searchEngine.search(query)
+    # Convert the dictionary to JSON with keys preserved
+    #json_output = json.dumps(res, sort_keys=False)
+    # Return the JSON output
+    #return json_output
     return jsonify(res)
 
 @app.route("/search_body")
@@ -175,4 +183,4 @@ def get_pageview():
 
 if __name__ == '__main__':
     # run the Flask RESTful API, make the server publicly available (host='0.0.0.0') on port 8080
-    app.run(host='0.0.0.0', port=8080, debug=True)
+    app.run(host='0.0.0.0', port=8080, debug=True, use_reloader=False)

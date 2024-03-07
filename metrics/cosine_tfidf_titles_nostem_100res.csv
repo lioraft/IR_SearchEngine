@@ -1,0 +1,31 @@
+query,duration,rq,precision@5,precision@10,precision@30,average precision,f1@30,recall@5,recall@10,recall@30
+genetics,No Results,None,None,None,None,None,None,None,None,None
+"Who is considered the ""Father of the United States""?",3.592988491,0,0,0,0,0,0,0,0,0
+economic,No Results,None,None,None,None,None,None,None,None,None
+When was the United Nations founded?,2.955662251,0,0,0,0,0,0,0,0,0
+video gaming,3.43277812,0,0,0.1,0.033,0.111,0.026,0,0.022,0.022
+3D printing technology,3.331172705,0,0,0,0,0,0,0,0,0
+"Who is the author of ""1984""?",3.379481316,0,0,0,0,0,0,0,0,0
+bioinformatics,No Results,None,None,None,None,None,None,None,None,None
+Who is known for proposing the heliocentric model of the solar system?,3.475459099,0,0,0,0,0,0,0,0,0
+Describe the process of water erosion.,3.431915522,0,0,0.1,0.033,0.143,0.026,0,0.021,0.021
+When was the Berlin Wall constructed?,3.347927809,0.081,0.2,0.2,0.067,0.292,0.051,0.02,0.041,0.041
+"What is the meaning of the term ""Habeas Corpus""?",3.082970142,0,0,0,0,0,0,0,0,0
+telecommunications,No Results,None,None,None,None,None,None,None,None,None
+internet,3.428880453,0.174,0.4,0.2,0.133,0.568,0.111,0.048,0.048,0.095
+What are the characteristics of a chemical element?,3.075188398,0,0,0,0.033,0.071,0.025,0,0,0.02
+Describe the structure of a plant cell.,3.119312048,0.09,0.4,0.2,0.067,0.583,0.051,0.041,0.041,0.041
+"Who painted ""Starry Night""?",3.086206913,0,0,0,0,0,0,0,0,0
+computer,No Results,None,None,None,None,None,None,None,None,None
+What is the structure of the Earth's layers?,3.002371073,0,0,0,0,0,0,0,0,0
+When did World War II end?,3.785315275,0,0,0.1,0.033,0.125,0.025,0,0.02,0.02
+When was the Gutenberg printing press invented?,3.030564308,0,0,0,0,0,0,0,0,0
+medicine,No Results,None,None,None,None,None,None,None,None,None
+Describe the water cycle.,2.889909029,0.046,0.2,0.1,0.033,1,0.026,0.021,0.021,0.021
+artificial intelligence,No Results,None,None,None,None,None,None,None,None,None
+physics,No Results,None,None,None,None,None,None,None,None,None
+nanotechnology,No Results,None,None,None,None,None,None,None,None,None
+When did the Black Death pandemic occur?,3.174468517,0.046,0.2,0.1,0.033,0.333,0.026,0.021,0.021,0.021
+neuroscience,No Results,None,None,None,None,None,None,None,None,None
+snowboard,3.018185854,0.241,0.2,0.3,0.233,0.411,0.304,0.062,0.188,0.438
+Who is the founder of modern psychology?,3.054528713,0,0,0,0,0,0,0,0,0
