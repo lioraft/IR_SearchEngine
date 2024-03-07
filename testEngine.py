@@ -1,10 +1,8 @@
-import csv
 import json
 import requests
 from time import time
-# url = 'http://35.232.59.3:8080'
 # place the domain you got from ngrok or GCP IP below.
-url = 'http://8ea7-34-134-26-103.ngrok-free.app'
+url = 'http://127.0.0.1:8080'
 
 def average_precision(true_list, predicted_list, k=40):
     true_set = frozenset(true_list)
@@ -44,30 +42,41 @@ def results_quality(true_list, predicted_list):
     return round(2.0 / (1.0/p5 + 1.0/f1_30), 3)
 
 
-def main():
+def metrics():
     with open('queries_train.json', 'rt') as f:
         queries = json.load(f)
-    rq = None
     qs_res = []
     for q, true_wids in queries.items():
-      duration, ap = None, None
+      duration, ap, rq = None, None, None
+      p5, p10, p30, f1_30, r5, r10, r30 = None, None, None, None, None, None, None
       t_start = time()
       try:
         res = requests.get(url + '/search', {'query': q}, timeout=35)
         duration = time() - t_start
         if res.status_code == 200:
+          # for tuple of (id, title) in res.json(). we currently send id only
           pred_wids, _ = zip(*res.json())
           rq = results_quality(true_wids, pred_wids)
+          p5 = precision_at_k(true_wids, pred_wids, 5)
+          p10 = precision_at_k(true_wids, pred_wids, 10)
+          p30 = precision_at_k(true_wids, pred_wids, 30)
+          ap = average_precision(true_wids, pred_wids, 30)
+          f1_30 = f1_at_k(true_wids, pred_wids, 30)
+          r5 = recall_at_k(true_wids, pred_wids, 5)
+          r10 = recall_at_k(true_wids, pred_wids, 10)
+          r30 = recall_at_k(true_wids, pred_wids, 30)
         else:
-          rq = "Couldn't get results"
+          duration = "Couldn't get response"
       except:
-        rq = "Couldn't get results"
+        duration = "Timeout"
 
-      qs_res.append((q, duration, rq))
+      qs_res.append((q, duration, rq, p5, p10, p30, ap, f1_30, r5, r10, r30))
 
-    # Calculate and print metrics for each query
-    for q, duration, rq in qs_res:
-        print(f"Query: {q}, Duration: {duration}, Results Quality: {rq}")
+    # write results to a csv file
+    with open('metrics/cosine_tfidf_w2v_pr_100res.csv', 'wt') as f:
+        f.write('query,duration,rq,precision@5,precision@10,precision@30,average precision,f1@30,recall@5,recall@10,recall@30\n')
+        for q, duration, rq, p5, p10, p30, ap, f1_30, r5, r10, r30 in qs_res:
+            f.write(f'{q},{duration},{rq},{p5},{p10},{p30},{ap},{f1_30},{r5},{r10},{r30}\n')
 
 if __name__ == '__main__':
-    main()
+    metrics()

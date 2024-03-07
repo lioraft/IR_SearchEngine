@@ -1,0 +1,31 @@
+query,duration,rq,precision@5,precision@10,precision@30,average precision,f1@30,recall@5,recall@10,recall@30
+genetics,Couldn't get response,None,None,None,None,None,None,None,None,None
+Who is considered the "Father of the United States"?,Timeout,None,None,None,None,None,None,None,None,None
+economic,30.023929357528687,0.373,0.4,0.5,0.467,0.559,0.35,0.04,0.1,0.28
+When was the United Nations founded?,Timeout,None,None,None,None,None,None,None,None,None
+video gaming,Timeout,None,None,None,None,None,None,None,None,None
+3D printing technology,Timeout,None,None,None,None,None,None,None,None,None
+Who is the author of "1984"?,Timeout,None,None,None,None,None,None,None,None,None
+bioinformatics,Timeout,None,None,None,None,None,None,None,None,None
+Who is known for proposing the heliocentric model of the solar system?,Timeout,None,None,None,None,None,None,None,None,None
+Describe the process of water erosion.,Timeout,None,None,None,None,None,None,None,None,None
+When was the Berlin Wall constructed?,Timeout,None,None,None,None,None,None,None,None,None
+What is the meaning of the term "Habeas Corpus"?,Timeout,None,None,None,None,None,None,None,None,None
+telecommunications,Timeout,None,None,None,None,None,None,None,None,None
+internet,Timeout,None,None,None,None,None,None,None,None,None
+What are the characteristics of a chemical element?,Timeout,None,None,None,None,None,None,None,None,None
+Describe the structure of a plant cell.,Timeout,None,None,None,None,None,None,None,None,None
+Who painted "Starry Night"?,Timeout,None,None,None,None,None,None,None,None,None
+computer,Timeout,None,None,None,None,None,None,None,None,None
+What is the structure of the Earth's layers?,Timeout,None,None,None,None,None,None,None,None,None
+When did World War II end?,Timeout,None,None,None,None,None,None,None,None,None
+When was the Gutenberg printing press invented?,Timeout,None,None,None,None,None,None,None,None,None
+medicine,Timeout,None,None,None,None,None,None,None,None,None
+Describe the water cycle.,Timeout,None,None,None,None,None,None,None,None,None
+artificial intelligence,Timeout,None,None,None,None,None,None,None,None,None
+physics,Timeout,None,None,None,None,None,None,None,None,None
+nanotechnology,Timeout,None,None,None,None,None,None,None,None,None
+When did the Black Death pandemic occur?,Timeout,None,None,None,None,None,None,None,None,None
+neuroscience,Timeout,None,None,None,None,None,None,None,None,None
+snowboard,Timeout,None,None,None,None,None,None,None,None,None
+Who is the founder of modern psychology?,Timeout,None,None,None,None,None,None,None,None,None

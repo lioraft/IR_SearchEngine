@@ -1,6 +1,6 @@
-import json
 from flask import Flask, request, jsonify
 from search_Engine import searchEngine
+
 
 class MyFlaskApp(Flask):
     def run(self, host=None, port=None, debug=None, **options):
@@ -36,11 +36,12 @@ def search():
     query = request.args.get('query', '')
     if len(query) == 0:
       return jsonify(res)
-    res = searchEngine.searchByCosineSimilarity(query)
+    res = searchEngine.search(query)
     # Convert the dictionary to JSON with keys preserved
-    json_output = json.dumps(res, sort_keys=False)
+    #json_output = json.dumps(res, sort_keys=False)
     # Return the JSON output
-    return json_output
+    #return json_output
+    return jsonify(res)
 
 @app.route("/search_body")
 def search_body():
@@ -182,4 +183,4 @@ def get_pageview():
 
 if __name__ == '__main__':
     # run the Flask RESTful API, make the server publicly available (host='0.0.0.0') on port 8080
-    app.run(host='0.0.0.0', port=8080, debug=True)
+    app.run(host='0.0.0.0', port=8080, debug=True, use_reloader=False)
