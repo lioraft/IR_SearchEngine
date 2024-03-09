@@ -4,17 +4,16 @@ the backend of the search engine and it's logic. the functions will be called by
 '''
 import gzip
 import io
-import pdb
 import pickle
 import re
-import tempfile
 from collections import Counter
-
 import gensim
 import numpy as np
 import inverted_index_gcp
 from pyspark.sql import SparkSession
 import google.cloud.storage as storage
+import pandas as pd
+import pdb
 
 
 # create a spark session
@@ -31,37 +30,44 @@ class searchEngine:
     def __init__(self):
         # create the index, right now it's empty
         self.index = inverted_index_gcp.InvertedIndex()
-
         # load index from gcp bucket
-        index = self.load_pkl_from_bucket(bucket_name, "postings_gcp/index.pkl")
+        index = self.load_pkl_from_bucket(bucket_name, "final_index/index.pkl")
 
         #### related to text indexing ####
         # Load the df pickle file and convert it into a Python object. This is a dictionary of the form {term: df}
         self.index.df = index.df
         # load docs_len from pickle. this is a dictionary of the form {doc_id: doc_len}
-        self.index.doc_len = self.load_pkl_from_bucket(bucket_name, "text_index/docs_len.pkl")
+        self.index.doc_len = self.load_pkl_from_bucket(bucket_name, "final_index/docs_len.pkl")
         # load idf from pickle. this is a dictionary of the form {term: idf}
-        self.index.idf = self.load_pkl_from_bucket(bucket_name, "text_index/idf.pkl")
+        self.index.idf = self.load_pkl_from_bucket(bucket_name, "final_index/idf.pkl")
         # load avg_doc_len from pickle. this is a float representing the average document length
-        self.index.avg_doc_len = self.load_pkl_from_bucket(bucket_name, "text_index/avg_doc_len.pkl")
+        self.index.avg_doc_len = self.load_pkl_from_bucket(bucket_name, "final_index/avg_doc_len.pkl")
         # load doc vec sqr from pickle. this is a dictionary of the form {doc_id: sqrt_sum_tf}
-        self.index.doc_vector_sqr = self.load_pkl_from_bucket(bucket_name, "text_index/doc_vec_sqr.pkl")
+        self.index.doc_vector_sqr = self.load_pkl_from_bucket(bucket_name, "final_index/doc_vec_sqr.pkl")
         # load posting locs from bucket.
         self.index.posting_locs = index.posting_locs
 
-        # load page rank from csv. this is a dataframe of the form {doc_id: page_rank}
-        # self.index.pr = self.load_df_from_bucket_to_pc(bucket_name, "text_index/page_rank/part-00000-7a6aa0cc-aeb2-4b4d-9e04-cd1c22588e11-c000.csv.gz")
+        # load page rank from csv. this is a dataframe of the form {doc_id: page_rank} that will be loaded to a dictionary
+        self.index.pr = self.load_pr_from_bucket(bucket_name, "final_index/page_rank.csv.gz")
 
         #### related to titles indexing ####
-        # load tf_idf of titles from csv. this is a dataframe of the following form {term: [(doc_id, tf_idf), ...]}
-        self.index.tf_idf_title = self.load_df_from_bucket_to_pc(bucket_name,"title_index/tf_idf_compressed/part-00000-b775031b-bf6d-4dda-9feb-cea9ccee9f1d-c000.csv.gz")
+        # load tf_idf of titles from csv. this is a dict of the following form {term: [(doc_id, tf_idf), ...]}
+        self.index.tf_idf_title = self.load_tfidf_from_bucket(bucket_name,"final_index/tfidf_titles.csv.gz")
         # load doc_sqr_root of title from pkl: dictionary {doc_id: sqrt_sum_tf}, meaning if doc_id has 3 words with tf 1, 2, 3, the value will be sqrt(1^2 + 2^2 + 3^2)
-        self.index.doc_vector_sqr_title = self.load_pkl_from_bucket(bucket_name, "title_index/doc_vec_sqr.pkl")
+        self.index.doc_vector_sqr_title = self.load_pkl_from_bucket(bucket_name, "final_index/doc_vec_sqr_titles.pkl")
+        # dictionary of the form {doc_id: title} for the docs in the corpus
+        self.id_to_title = self.load_pkl_from_bucket(bucket_name, "final_index/id_title_dict.pkl")
 
         #### gensim word2vec model ####
-        # self.word2vec = self.load_word2vec_from_bucket(bucket_name, "GoogleNews-vectors-negative300.bin.gz")
-        # right now loading locally
-        self.word2vec = gensim.models.KeyedVectors.load('C:\\Users\\Lior\\Desktop\\Semester 5\\IR\\project related\\word2vec.model')
+        self.word2vec = self.load_word2vec_from_bucket(bucket_name, "final_index/GoogleNews-vectors-negative300.bin.gz")
+        # local load - for pycharm, not for gcp instance
+        #self.word2vec = gensim.models.KeyedVectors.load('C:\\Users\\Lior\\Desktop\\Semester 5\\IR\\project related\\word2vec.model')
+
+        #### saving results for current search ###
+        self.title_results = {}
+        self.text_results = {}
+        self.pr_results = {}
+        self.final_results = {}
 
 
     ''' Load data from GCP bucket '''
@@ -81,35 +87,37 @@ class searchEngine:
         contents = blob.download_as_string()
         return pickle.loads(contents)
 
-    def load_df_from_bucket_to_pc(self, bucket_name, file_path):
+    def load_pr_from_bucket(self, bucket_name, file_path):
         """
         Load a DataFrame from a CSV file stored in a Google Cloud Storage bucket.
+        And convert it to a dictionary of page rank.
 
         Args:
         - bucket_name: Name of the Google Cloud Storage bucket.
         - file_path: Path to the CSV file within the bucket.
 
         Returns:
-        - A DataFrame containing the contents of the CSV file.
+        - A dictionary of the form {doc_id: page_rank}.
         """
-        # Get the GCS bucket and blob
-        bucket = storage_client.get_bucket(bucket_name)
-        blob = bucket.blob(file_path)
-        # Download the file contents as a string
-        file_contents = blob.download_as_string()
-        with gzip.GzipFile(fileobj=io.BytesIO(file_contents)) as gz:
-            file_contents = gz.read()
-        # Save the file to a temporary location
-        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-            temp_file.write(file_contents)
-            temp_file_path = temp_file.name
-        # Read the CSV data into a Spark DataFrame
-        df = spark.read.csv(temp_file_path, header=True, inferSchema=True)
-        return df
+        # get df from bucket
+        df = self.load_df_from_bucket_to_gcp(bucket_name, file_path)
+        # convert the DataFrame to a dictionary and return it
+        dict_from_df = dict(zip(df.iloc[:, 0], df.iloc[:, 1]))
+        return dict_from_df
 
     # function to load a DataFrame from a CSV file in a GCP bucket
     def load_df_from_bucket_to_gcp(self, bucket_name, file_path):
-        return spark.read.format("csv").option("header", "true") .option("inferSchema", "true") .load("gs://{}/{}".format(bucket_name, file_path))
+        # get the bucket
+        bucket = storage_client.get_bucket(bucket_name)
+        # get the blob (file)
+        blob = bucket.blob(file_path)
+        # download the file contents as a string
+        compressed_content = blob.download_as_string()
+        # decompress the content
+        csv_content = gzip.decompress(compressed_content).decode('utf-8')
+        # convert CSV content to pandas DataFrame
+        df = pd.read_csv(io.StringIO(csv_content))
+        return df
 
     # load word2vec model from bucket
     def load_word2vec_from_bucket(self, bucket_name, file_path):
@@ -137,71 +145,37 @@ class searchEngine:
         # save the model to disk
         model.save('word2vec.model')
 
-
-    ''' DataFrame processing function, for title indexing '''
-    def filterTFIDF(self, df, query_terms):
-        ''' This function filters the tf-idf data from a DataFrame and returns a dictionary.
+    def load_tfidf_from_bucket(self, bucket_name, file_path):
+        ''' This function gets the tf-idf data from a DataFrame and returns a dictionary.
         Parameters:
         -----------
-        df: DataFrame
-            A DataFrame of the form {term: [(doc_id, tf-idf), ...]}.
-        query_terms: list
-            A list of the distinct query words.
+        bucket_name: str
+            A string representing the name of the bucket.
+        file_path: str
+            A string representing the path to the file within the bucket.
         Returns:
         --------
-        all_data: dict
-            A dictionary of the form {term: [(doc_id, tf-idf), ...]} representing the tf-idf of the documents with the query.
+        res: dict
+            A dictionary of the form {term: [(doc_id, tf-idf), ...]} representing the tf-idf of titles.
         '''
-        # filter df by query terms
-        filtered_df = df.filter(df[0].isin(query_terms))
+        # get df from bucket
+        df = self.load_df_from_bucket_to_gcp(bucket_name, file_path)
         # Create an empty dictionary to store the data
-        all_data = {}
-        # Collect the DataFrame into the driver node as a list of rows
-        rows = filtered_df.collect()
+        result_dict = {}
         # Iterate over the rows of the DataFrame
-        for row in rows:
+        for index, row in df.iterrows():
             # Extract relevant data from the DataFrame row
-            key = str(row[0])  # term
-            value1 = str(row[1])  # doc id
-            value2 = float(row[2])  # tf-idf
-            # Check if the key exists in the dictionary
-            if key not in all_data:
-                all_data[key] = []
-            # Append the values to the list associated with the key
-            all_data[key].append((value1, value2))
-        return all_data
-
-    def filterKeyValueDF(self, df, docs):
-        ''' This function loads key and value from DataFrame and returns a dictionary.
-        Parameters:
-        -----------
-        df: DataFrame
-            A DataFrame of the form {doc_id: page_rank} or any other {key:value}.
-        docs: list
-            A list of the distinct keys, in this case, the doc_ids.
-        Returns:
-        --------
-        df_dict: dict
-            A dictionary of the form {key: value}, where first column is key and second column is value.
-        '''
-        # convert all keys to int
-        docs = [int(doc) for doc in docs]
-        # filter df by query terms
-        filtered_df = df.filter(df[0].isin(docs))
-        # Create an empty dictionary to store the data
-        df_dict = {}
-        # Collect the DataFrame into the driver node as a list of rows
-        rows = filtered_df.collect()
-        # Iterate over the rows of the DataFrame
-        for row in rows:
-            # Extract relevant data from the DataFrame row
-            key = str(row[0])  #  first column is the key
-            value = float(row[1])  #  second column contains value
-            # Add the key-value pair to the dictionary
-            df_dict[key] = value
-        # sort the dictionary by value in descending order
-        df_dict = dict(sorted(df_dict.items(), key=lambda item: item[1], reverse=True))
-        return df_dict
+            key = str(row.iloc[0])  # term
+            value1 = str(row.iloc[1])  # doc id
+            value2 = float(row.iloc[2])  # tf-idf
+            # Check if the key already exists in the dictionary
+            if key in result_dict:
+                # If the key exists, append the tuple to the existing list of tuples
+                result_dict[key].append((value1, value2))
+            else:
+                # If the key does not exist, create a new list with the tuple and assign it to the key
+                result_dict[key] = [(value1, value2)]
+        return result_dict
 
 
     """Process Query before search"""
@@ -256,20 +230,22 @@ class searchEngine:
         return [token.group() for token in RE_WORD.finditer(text.lower())]
 
     # function to preprocess the query
-    def processQuery(self, query):
+    def processQuery(self, query, isStem=False):
         ''' This function tokenizes the query using the staff-provided tokenizer from
             Assignment 3 (GCP part) to do the tokenization and remove stopwords.
         Parameters:
         -----------
         query: list
             A list of the query words.
+        isStem: bool
+            A boolean representing whether to stem the query or not.
         Returns:
         --------
         tokens: list
             A list of the distinct query words after removing stopwords and stemming.
         '''
         # remove stopwords and stem the query
-        tokens = inverted_index_gcp.InvertedIndex.filter_tokens(query, True)
+        tokens = inverted_index_gcp.InvertedIndex.filter_tokens(query, isStem)
         # return the tokens of the query
         return tokens
 
@@ -287,11 +263,6 @@ class searchEngine:
         '''
         return Counter(query)
 
-    """Process the doc from index and return vectors for cosine similarity calculation and ranking
-    This function is for title indexing. We tried to use tf-idf for the cosine similarity dot product calculation,
-    instead of using the tf of the query and the tf of the doc.
-    """
-
     ''' Process the doc from index and return vectors for cosine similarity calculation and ranking
     This function is for text indexing and title indexing. We tried to use tf-idf for the cosine similarity dot product calculation of title,
     instead of using the tf of the query and the tf of the doc. We used regular cos sim vectors for the text indexing.
@@ -305,7 +276,7 @@ class searchEngine:
         index = 0
         # if title, get tf-idf dict from index
         if isTitle:
-            tf_idf_dict = self.filterTFIDF(self.index.tf_idf_title, query_terms)
+            tf_idf_dict = self.index.tf_idf_title
         # iterate over the terms in the query
         for term in query_terms:
             # get posting list iterator for term
@@ -317,6 +288,9 @@ class searchEngine:
                     posting_list_iter = []
             else:
                 posting_list_iter = self.index.read_a_posting_list("postings_gcp", term, bucket_name)
+                # if the term is not in the index, skip it
+                if posting_list_iter is None:
+                    continue
             # iterate over the posting list
             for doc_id, tf in posting_list_iter:
                 # if the doc_id is not in the dict, add it with the base vector
@@ -349,12 +323,20 @@ class searchEngine:
         for term in query_terms:
             # get posting list iterator for term
             posting_list_iter = self.index.read_a_posting_list("postings_gcp", term, bucket_name)
+            # if the term is not in the index, skip it
+            if posting_list_iter is None:
+                continue
+            # stem the term in order to get idf
+            stem_term = self.index.stemmer.stem(term)
+            # check if term is in idf dict, if not, skip it
+            if stem_term not in self.index.idf:
+                continue
+            # get idf for term and add 1 to avoid division by zero
+            idf = self.index.idf[stem_term] + 1
             # iterate over the posting list
             for doc_id, tf in posting_list_iter:
                 # calculate tf(i,j)
                 tfij = tf / self.index.doc_len[doc_id]
-                # get idf
-                idf = self.index.idf[term]
                 # calculate tf-idf
                 tfidf = tfij * idf
                 # if the doc_id is not in the dict, add it
@@ -362,10 +344,8 @@ class searchEngine:
                     docs_tfidf[doc_id] = 0
                 # add the tf-idf to the dict
                 docs_tfidf[doc_id] += tfidf
-        # sort the dict by value in descending order of tf-idf
-        sorted_sim_dict = dict(sorted(docs_tfidf.items(), key=lambda item: item[1], reverse=True))
-        # return the dict
-        return sorted_sim_dict
+        # sort the dict by value in descending order of tf-idf and save the top 100 results
+        self.text_results = dict(sorted(docs_tfidf.items(), key=lambda item: item[1], reverse=True)[:100])
 
     def cosineSimilarity(self, query_vector, docs_vector, isTitle=False):
         '''
@@ -421,7 +401,7 @@ class searchEngine:
                 # calculate the dot product of the doc vector and the query vector and add it to the dot_product
                 dot_product += vector[i] * query_vector[i]
             # add the dot product to the dictionary of dot product similarities
-            DP_sim_docs[doc] = dot_product
+            DP_sim_docs[str(doc)] = dot_product
         return DP_sim_docs
 
     def BM25(self, proc_query, b=0.75, k1=1.2, k3=1):
@@ -441,10 +421,18 @@ class searchEngine:
         BM25_docs = {}
         # iterate over terms
         for term in query_terms:
-            # get idf for term and add 1 to avoid division by zero
-            idf = self.index.idf[term] + 1
             # get posting list iterator for term
             posting_list_iter = self.index.read_a_posting_list("postings_gcp", term, bucket_name)
+            # if the term is not in the index, skip it
+            if posting_list_iter is None:
+                continue
+            # stem the term in order to get idf
+            stem_term = self.index.stemmer.stem(term)
+            # check if term is in idf dict, if not, skip it
+            if stem_term not in self.index.idf:
+                continue
+            # get idf for term and add 1 to avoid division by zero
+            idf = self.index.idf[stem_term] + 1
             # iterate over the posting list
             for doc_id, tf in posting_list_iter:
                 # calculate tf(i,j)
@@ -459,9 +447,8 @@ class searchEngine:
                     BM25_docs[str_doc_id] = 0
                 # add the BM25 to the dict
                 BM25_docs[str_doc_id] += BM25
-        # sort the dict by value in descending order of BM25
-        sorted_sim_dict = dict(sorted(BM25_docs.items(), key=lambda item: item[1], reverse=True))
-        return sorted_sim_dict
+        # sort the dict by value in descending order of BM25 and save the top 100 results
+        self.text_results = dict(sorted(BM25_docs.items(), key=lambda item: item[1], reverse=True)[:100])
 
     """Search functions"""
     def searchByCosineSimilarity(self, proc_query, isTitle=False):
@@ -485,55 +472,82 @@ class searchEngine:
         # convert the query vector to a list of values
         query_vector = list(proc_query.values())
         similarity_dict = self.cosineSimilarity(query_vector, docs_vectors, isTitle)
-        # sort the similarity dict by value in descending order
-        sorted_sim_dict = dict(sorted(similarity_dict.items(), key=lambda item: item[1], reverse=True))
-        # return ids of docs sorted by cosine similarity
-        return sorted_sim_dict
+        # sort the similarity dict by value in descending order and save the top 100 results
+        sorted_sim_dict = dict(sorted(similarity_dict.items(), key=lambda item: item[1], reverse=True)[:100])
+        # save results based on title or text
+        if isTitle:
+            self.title_results = sorted_sim_dict
+        else:
+            self.text_results = sorted_sim_dict
 
     def search(self, query):
+        '''
+        This function returns the top 100 results of the search for the query.
+        Parameters:
+        -----------
+        query: str
+            The query string.
+        What the function does:
+        -----------------------
+        The function tokenizes the query and expands it if it's less than 3 words.
+        Then it vectorizes the expanded query and creates threads for the cosine similarity search for title and text.
+        It then combines the results of the two searches and adds the page rank to the results.
+        Returns:
+        --------
+        list
+            A list of the top 100 results of the search.
+        '''
         # tokenize the query
         tokenized = self.tokenize(query)
-
-        # if length of tokens is less than 5, return the query up to 5 words
+        # if length of tokenized is 0, return empty list
+        if len(tokenized) == 0:
+            return []
+        # if length of query is 1, meaning it's too short, so expand it by 3 words
         if len(tokenized) == 1:
-            tokenized = self.expandQuery(tokenized, 4)
-        else:
-            if len(tokenized) == 2:
-                tokenized = self.expandQuery(tokenized, 2)
-        queryTok = self.processQuery(tokenized)
+            tokenized = self.expandQuery(tokenized, 3)
+        # process the query, stemming it and removing stopwords
+        queryTokTitle = self.processQuery(tokenized, True)
+        queryTokText = self.processQuery(tokenized, False)
         # vectorize the expanded query, returning a counter of the expanded query tokens and their counts
-        query_counter = self.vectorizeQuery(queryTok)
-        # search by cosine similarity on titles
-        cosSimTitle = self.searchByCosineSimilarity(query_counter, True)
-        cosSimText = self.searchByCosineSimilarity(query_counter, False)
+        queryCountTitle = self.vectorizeQuery(queryTokTitle)
+        queryCountText = self.vectorizeQuery(queryTokText)
+        # search by bm25 for text
+        self.BM25(queryCountText)
+        # search by cosine similarity for title
+        self.searchByCosineSimilarity(queryCountTitle, True)
         # create a list of dictionaries
-        dicts = [cosSimTitle, cosSimText]
+        dicts = [self.title_results, self.text_results]
         # create percentage list
         p = [0.3, 0.6]
-        # try to combine the results of the two searches
-        return self.combineReulsts(dicts, p)
+        # combine the results of the two searches
+        self.combineReulsts(dicts, p)
+        # add page rank to the results
+        res = self.addPageRank(self.final_results, 0.1)
+        # reset all dictionaries
+        self.resetAfterSearch()
+        # map each id to its title in tuples
+        res = [(k, self.id_to_title[int(k)]) for k, v in res.items()]
+        # return top 100 results
+        return res[:100]
 
 
-    """ Helper function """
+    """ Helper functions """
 
-    def combineReulsts(self, dicts, p, res=100):
+    def combineReulsts(self, dicts, p):
         '''
         This function combines the results of the two searches.
         Parameters:
         -----------
         dicts: list
-            A list of the dictionaries representing the results of the searches to combine.
+            A list of the dictionaries representing the results of the searches to combine
+            with current self.final_results.
         p: list
             A list of the percentages to use for the weighted sum of the results.
-        res: int
-            An integer representing the number of results to return.
         Returns:
         --------
         list
             A list of the top 100 results of the combined search.
         '''
-        # combine the results of the two searches
-        summed_dict = {}
         # create index
         index = 0
         # iterate over the dictionaries
@@ -541,34 +555,43 @@ class searchEngine:
             # iterate over the items in the dictionary
             for k, v in d.items():
                 # if the key is not in the dict, add it
-                if k not in summed_dict:
-                    summed_dict[k] = 0
+                if k not in self.final_results:
+                    self.final_results[k] = 0
                 # add the value to the dict
-                summed_dict[k] += v * p[index]
+                self.final_results[k] += v * p[index]
             # increment the index
             index += 1
-        # sort the dict by value in descending order
-        sorted_dict = dict(sorted(summed_dict.items(), key=lambda item: item[1], reverse=True))
-        # return the top 100 results
-        return list(sorted_dict.items())[0:res]
+        # sort the dict by value in descending order and store in final results
+        self.final_results = dict(sorted(self.final_results.items(), key=lambda item: item[1], reverse=True))
 
     # function for adding page rank to score
-    def addPageRank(self, summed_dict):
+    def addPageRank(self, sum_dict, p=0.1):
         '''
-        This function adds the page rank to the score of the documents.
+        This function adds the page rank to the score of the documents and stores it in a dictionary.
         Parameters:
         -----------
-        summed_dict: dict
+        docs: dict
             A dictionary of the form {doc_id: score} representing the score of the documents.
+        p: float
+            A float representing the percentage to use for the weighted sum of the results.
         Returns:
         --------
-        dict
-            A dictionary of the form {doc_id: score} representing the score of the documents with the page rank added to the score.
+        list
+            A list of the top 100 results of the search.
         '''
-        # get page rank for each doc in the dict and append it to the value of the dick
-        pr_dict = self.filterKeyValueDF(self.index.pr, summed_dict.keys())
-        # add each value to it's matching key
-        for k, v in summed_dict.items():
-            summed_dict[k] += 0.1 * pr_dict[k]
-        # return result
-        return summed_dict
+        # iterate over the items in the dictionary
+        for k, v in sum_dict.items():
+            # if the key is not in the dict, add it
+            if int(k) in self.index.pr:
+                sum_dict[k] += self.index.pr[int(k)] * p
+        # sort the dict by value in descending order and store in final results
+        return dict(sorted(sum_dict.items(), key=lambda item: item[1], reverse=True))
+
+    def resetAfterSearch(self):
+        '''
+        Reset all dictionaries created during search.
+        '''
+        self.final_results = {}
+        self.pr_results = {}
+        self.text_results = {}
+        self.title_results = {}

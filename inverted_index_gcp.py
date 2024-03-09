@@ -9,9 +9,29 @@ from collections import defaultdict
 from contextlib import closing
 
 PROJECT_ID = 'assignment3-413720'
+
+
+# download the stopwords
+#import nltk
+#nltk.download('stopwords')
+
 # create list of stop words
 english_stopwords = frozenset(stopwords.words('english'))
-corpus_stopwords = ['category', 'references', 'also', 'links', 'extenal', 'see', 'thumb']
+
+# we used the following function inside the inverted index class to get most common words and remove some words that are not stop words but are not useful for our purposes
+# def getMostCommonWords(self):
+#     # sort self.index.df
+#     sorted_df = dict(sorted(self.df.items(), key=lambda item: item[1], reverse=True))
+#     # print top 100 words
+#     words = list(sorted_df.items())[0:200]
+#     for word in words:
+#         print(word)
+
+# remove some words that are not stop words but are not useful
+corpus_stopwords = ['category', 'references', 'also', 'links', 'external', 'see', 'thumb', 'known', 'since', 'well', 'used', 'list',
+                    'several', 'named', 'called', 'based', 'number', 'around', 'due', 'general', 'released', 'another', 'along', 'received',
+                    'within', 'public', 'include', 'described', 'describe', 'like', 'included', 'still', 'although', 'among', 'according', 'could',
+                    'much', 'given', 'make', 'went', 'become', 'came', 'next', 'form', 'back', 'way', 'use', 'considered']
 all_stopwords = english_stopwords.union(corpus_stopwords)
 
 '''
@@ -131,6 +151,8 @@ class InvertedIndex:
         self.pr = None
         # store idf for each term in the index
         self.idf = None
+        # stemmer
+        self.stemmer = PorterStemmer()
         # avg doc len
         self.avg_doc_len = None
 
@@ -259,6 +281,8 @@ class InvertedIndex:
         else:
             # if stemming, stem the tokens
             tokens = [stemmer.stem(str(t)) for t in tokens if t not in all_stopwords]
+            # remove empty strings or stopwords after stemming
+            tokens = [t for t in tokens if t not in all_stopwords and t != '']
         return tokens
 
     @staticmethod

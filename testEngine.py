@@ -2,7 +2,8 @@ import json
 import requests
 from time import time
 # place the domain you got from ngrok or GCP IP below.
-url = 'http://127.0.0.1:8080'
+url = 'http://34.72.210.232:8080' # gcp ip
+# url = 'http://127.0.0.1:8080' # local
 
 def average_precision(true_list, predicted_list, k=40):
     true_set = frozenset(true_list)
@@ -51,7 +52,7 @@ def metrics():
       p5, p10, p30, f1_30, r5, r10, r30 = None, None, None, None, None, None, None
       t_start = time()
       try:
-        res = requests.get(url + '/search', {'query': q}, timeout=35)
+        res = requests.get(url + '/search', {'query': q}, timeout=60)
         duration = time() - t_start
         if res.status_code == 200:
           # for tuple of (id, title) in res.json(). we currently send id only
@@ -73,7 +74,7 @@ def metrics():
       qs_res.append((q, duration, rq, p5, p10, p30, ap, f1_30, r5, r10, r30))
 
     # write results to a csv file
-    with open('metrics/cosine_tfidf_w2v_pr_100res.csv', 'wt') as f:
+    with open('metrics/gcp_final_exp3or1_100res.csv', 'wt') as f:
         f.write('query,duration,rq,precision@5,precision@10,precision@30,average precision,f1@30,recall@5,recall@10,recall@30\n')
         for q, duration, rq, p5, p10, p30, ap, f1_30, r5, r10, r30 in qs_res:
             f.write(f'{q},{duration},{rq},{p5},{p10},{p30},{ap},{f1_30},{r5},{r10},{r30}\n')
