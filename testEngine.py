@@ -55,7 +55,6 @@ def metrics():
         res = requests.get(url + '/search', {'query': q}, timeout=60)
         duration = time() - t_start
         if res.status_code == 200:
-          # for tuple of (id, title) in res.json(). we currently send id only
           pred_wids, _ = zip(*res.json())
           rq = results_quality(true_wids, pred_wids)
           p5 = precision_at_k(true_wids, pred_wids, 5)

@@ -30,7 +30,7 @@ class searchEngine:
     def __init__(self):
         # create the index, right now it's empty
         self.index = inverted_index_gcp.InvertedIndex()
-        # load index from gcp bucket
+        # load index from gcp bucket. (same index from assignment 3)
         index = self.load_pkl_from_bucket(bucket_name, "final_index/index.pkl")
 
         #### related to text indexing ####
@@ -44,14 +44,14 @@ class searchEngine:
         self.index.avg_doc_len = self.load_pkl_from_bucket(bucket_name, "final_index/avg_doc_len.pkl")
         # load doc vec sqr from pickle. this is a dictionary of the form {doc_id: sqrt_sum_tf}
         self.index.doc_vector_sqr = self.load_pkl_from_bucket(bucket_name, "final_index/doc_vec_sqr.pkl")
-        # load posting locs from bucket.
+        # load posting locations.
         self.index.posting_locs = index.posting_locs
 
-        # load page rank from csv. this is a dataframe of the form {doc_id: page_rank} that will be loaded to a dictionary
+        # load page rank from csv. this is a dataframe that will be converted to a dictionary in the form {doc_id: page_rank}
         self.index.pr = self.load_pr_from_bucket(bucket_name, "final_index/page_rank.csv.gz")
 
         #### related to titles indexing ####
-        # load tf_idf of titles from csv. this is a dict of the following form {term: [(doc_id, tf_idf), ...]}
+        # load tf_idf of titles from csv. this is a dict of the following form {term: [(doc_id, tf_idf), ...]}, based on the titles
         self.index.tf_idf_title = self.load_tfidf_from_bucket(bucket_name,"final_index/tfidf_titles.csv.gz")
         # load doc_sqr_root of title from pkl: dictionary {doc_id: sqrt_sum_tf}, meaning if doc_id has 3 words with tf 1, 2, 3, the value will be sqrt(1^2 + 2^2 + 3^2)
         self.index.doc_vector_sqr_title = self.load_pkl_from_bucket(bucket_name, "final_index/doc_vec_sqr_titles.pkl")
@@ -60,7 +60,7 @@ class searchEngine:
 
         #### gensim word2vec model ####
         self.word2vec = self.load_word2vec_from_bucket(bucket_name, "final_index/GoogleNews-vectors-negative300.bin.gz")
-        # local load - for pycharm, not for gcp instance
+        # local load - we used for pycharm, not for gcp instance
         #self.word2vec = gensim.models.KeyedVectors.load('C:\\Users\\Lior\\Desktop\\Semester 5\\IR\\project related\\word2vec.model')
 
         #### saving results for current search ###
@@ -77,10 +77,10 @@ class searchEngine:
 
         Args:
         - bucket_name: Name of the Google Cloud Storage bucket.
-        - file_path: Path to the file within the bucket.
+        - file_path: Path to the pickle file within the bucket.
 
         Returns:
-        - The contents of the file.
+        - The contents of the file as a Python object.
         """
         bucket = storage_client.get_bucket(bucket_name)
         blob = bucket.blob(file_path)
@@ -89,8 +89,8 @@ class searchEngine:
 
     def load_pr_from_bucket(self, bucket_name, file_path):
         """
-        Load a DataFrame from a CSV file stored in a Google Cloud Storage bucket.
-        And convert it to a dictionary of page rank.
+        Load a DataFrame from a CSV file stored in a Google Cloud Storage bucket,
+        and convert it to a dictionary of page rank.
 
         Args:
         - bucket_name: Name of the Google Cloud Storage bucket.
@@ -107,6 +107,19 @@ class searchEngine:
 
     # function to load a DataFrame from a CSV file in a GCP bucket
     def load_df_from_bucket_to_gcp(self, bucket_name, file_path):
+        '''
+        This function loads a DataFrame from a CSV file stored in a Google Cloud Storage bucket and returns
+        it as a pandas DataFrame.
+        Parameters:
+        -----------
+        bucket_name: str
+            A string representing the name of the bucket.
+        file_path: str
+            A string representing the path to the file within the bucket.
+        Returns:
+        --------
+        df: pandas DataFrame
+        '''
         # get the bucket
         bucket = storage_client.get_bucket(bucket_name)
         # get the blob (file)
@@ -126,7 +139,7 @@ class searchEngine:
 
         Args:
         - bucket_name: Name of the Google Cloud Storage bucket.
-        - file_path: Path to the file within the bucket.
+        - file_path: Path to the compressed model file within the bucket.
 
         Returns:
         - The word2vec model.
@@ -135,15 +148,6 @@ class searchEngine:
         path = f'gs://{bucket_name}/{file_path}'
         # return model
         return gensim.models.KeyedVectors.load_word2vec_format(path, binary=True)
-
-    # function we used to create the word2vec model
-    def create_word2vec(self):
-        ''' This function creates the word2vec model from the GoogleNews-vectors-negative300.bin.gz file and saves it to disk.'''
-        # Load Google's pre-trained Word2Vec model.
-        path = 'GoogleNews-vectors-negative300.bin.gz'
-        model = gensim.models.KeyedVectors.load_word2vec_format(path, binary=True)
-        # save the model to disk
-        model.save('word2vec.model')
 
     def load_tfidf_from_bucket(self, bucket_name, file_path):
         ''' This function gets the tf-idf data from a DataFrame and returns a dictionary.
@@ -188,11 +192,12 @@ class searchEngine:
         tokQuery: list
             A list of the query words.
         numWord: int
-            An integer representing the number of words to expand the query with.
+            An integer representing the number of words to expand each one of the tokens of the query with,
+            default is 3.
         Returns:
         --------
         list
-            A list of the distinct query words after expanding the query.
+            A list of the query words after expanding the query.
         '''
         # create a list to store the expanded query
         expanded_query = tokQuery.copy()
@@ -201,7 +206,7 @@ class searchEngine:
             # check if word is stopword or not in vocab, if so, skip it
             if inverted_index_gcp.InvertedIndex.isStopWord(word) or not word in self.word2vec.key_to_index:
                 continue
-            # get the most similar words to the word in the query
+            # get the top n similar words to the word in the query
             similar_words = self.word2vec.most_similar(word, topn=numWord)
             # iterate over the similar words
             for sim_word in similar_words:
@@ -222,7 +227,7 @@ class searchEngine:
         Returns:
         --------
         list
-            A list of the words in the text.
+            A list of the words in the text, in lowercase and without punctuation.
         '''
         # regular expression to find words
         RE_WORD = re.compile(r"""[\#\@\w](['\-]?\w){,24}""", re.UNICODE)
@@ -242,7 +247,7 @@ class searchEngine:
         Returns:
         --------
         tokens: list
-            A list of the distinct query words after removing stopwords and stemming.
+            A list of the distinct query words after removing stopwords (and stemming if isStem is True).
         '''
         # remove stopwords and stem the query
         tokens = inverted_index_gcp.InvertedIndex.filter_tokens(query, isStem)
@@ -265,9 +270,22 @@ class searchEngine:
 
     ''' Process the doc from index and return vectors for cosine similarity calculation and ranking
     This function is for text indexing and title indexing. We tried to use tf-idf for the cosine similarity dot product calculation of title,
-    instead of using the tf of the query and the tf of the doc. We used regular cos sim vectors for the text indexing.
+    instead of using the tf of the doc. We used regular cos sim vectors for the text indexing.
     '''
     def processDocsCosSim(self, query_terms, isTitle=False):
+        '''
+        This function processes the documents in the index and returns the vectors of the documents for cosine similarity calculation and ranking.
+        Parameters:
+        -----------
+        query_terms: list
+            A list of the query words.
+        isTitle: bool
+            A boolean representing whether it's the title or the text.
+        Returns:
+        --------
+        docs_vectors: dict
+            A dictionary of the form {doc_id: [count1, count2, ...]} representing the vectors of the documents.
+        '''
         # create empty dict for vectors of query, keys are doc_ids and values are lists of tf-idf vectors
         docs_vectors = {}
         # create base vector for each doc_id, with 0s for each term in the query
@@ -305,7 +323,8 @@ class searchEngine:
 
     """Similarity and Ranking"""
     def TFIDF(self, proc_query):
-        ''' This function returns up to a 100 of your best search results for the query.
+        ''' This function returns up to a 100 of your best search results for the query,
+        based on the tf-idf of the documents with the query.
         Parameters:
         -----------
         proc_query: Counter
@@ -313,7 +332,7 @@ class searchEngine:
         Returns:
         --------
         list
-            A list of the top 100 results of the search.
+            A list of the top 100 results of the search based on the tf-idf of the documents with the query.
         '''
         # get the keys of the query vector, meaning the distinct query words
         query_terms = list(proc_query.keys())
@@ -489,13 +508,13 @@ class searchEngine:
             The query string.
         What the function does:
         -----------------------
-        The function tokenizes the query and expands it if it's less than 3 words.
-        Then it vectorizes the expanded query and creates threads for the cosine similarity search for title and text.
+        The function tokenizes the query and expands it if it's too short.
+        Then it vectorizes the expanded query and searches the title and text.
         It then combines the results of the two searches and adds the page rank to the results.
         Returns:
         --------
         list
-            A list of the top 100 results of the search.
+            A list of the top 100 results of the search, containing tuples of (doc_id, title).
         '''
         # tokenize the query
         tokenized = self.tokenize(query)
@@ -576,8 +595,8 @@ class searchEngine:
             A float representing the percentage to use for the weighted sum of the results.
         Returns:
         --------
-        list
-            A list of the top 100 results of the search.
+        dict
+            A sorted dictionary of the form {doc_id: score} representing the score of the documents with the page rank added.
         '''
         # iterate over the items in the dictionary
         for k, v in sum_dict.items():

@@ -37,10 +37,6 @@ def search():
     if len(query) == 0:
       return jsonify(res)
     res = searchEngine.search(query)
-    # Convert the dictionary to JSON with keys preserved
-    #json_output = json.dumps(res, sort_keys=False)
-    # Return the JSON output
-    #return json_output
     return jsonify(res)
 
 @app.route("/search_body")
