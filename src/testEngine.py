@@ -45,7 +45,7 @@ def results_quality(true_list, predicted_list):
 
 def metrics():
     qs_res = []
-    with open('tests/queries_train.json', 'rt') as f:
+    with open('../tests/queries_train.json', 'rt') as f:
         queries = json.load(f)
     for q, true_wids in queries.items():
       duration, ap, rq = None, None, None
@@ -72,7 +72,7 @@ def metrics():
 
       qs_res.append((q, duration, rq, p5, p10, p30, ap, f1_30, r5, r10, r30))
 
-    with open('tests/sample1.json', 'rt') as f:
+    with open('../tests/sample1.json', 'rt') as f:
         queries = json.load(f)
     for q, true_wids in queries.items():
       duration, ap, rq = None, None, None
@@ -99,7 +99,7 @@ def metrics():
 
       qs_res.append((q, duration, rq, p5, p10, p30, ap, f1_30, r5, r10, r30))
 
-    with open('tests/sample2.json', 'rt') as f:
+    with open('../tests/sample2.json', 'rt') as f:
         queries = json.load(f)
     for q, true_wids in queries.items():
       duration, ap, rq = None, None, None
