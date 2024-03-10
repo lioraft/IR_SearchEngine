@@ -305,7 +305,11 @@ class searchEngine:
                 else:
                     posting_list_iter = []
             else:
-                posting_list_iter = self.index.read_a_posting_list("postings_gcp", term, bucket_name)
+                # get posting list iterator for term, if term is not in the index, skip it
+                try:
+                    posting_list_iter = self.index.read_a_posting_list("postings_gcp", term, bucket_name)
+                except:
+                    posting_list_iter = None
                 # if the term is not in the index, skip it
                 if posting_list_iter is None:
                     continue
@@ -340,8 +344,11 @@ class searchEngine:
         docs_tfidf = {}
         # iterate over the terms in the query
         for term in query_terms:
-            # get posting list iterator for term
-            posting_list_iter = self.index.read_a_posting_list("postings_gcp", term, bucket_name)
+            # get posting list iterator for term, if term is not in the index, skip it
+            try:
+                posting_list_iter = self.index.read_a_posting_list("postings_gcp", term, bucket_name)
+            except:
+                posting_list_iter = None
             # if the term is not in the index, skip it
             if posting_list_iter is None:
                 continue
@@ -423,7 +430,7 @@ class searchEngine:
             DP_sim_docs[str(doc)] = dot_product
         return DP_sim_docs
 
-    def BM25(self, proc_query, b=0.75, k1=1.2, k3=1):
+    def BM25(self, proc_query, b=0.5, k1=1.2, k3=1):
         ''' This function returns up to a 100 of your best search results for the query.
         Parameters:
         -----------

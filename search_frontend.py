@@ -36,7 +36,11 @@ def search():
     query = request.args.get('query', '')
     if len(query) == 0:
       return jsonify(res)
-    res = searchEngine.search(query)
+    # try to get the results from the search engine, if it fails return an empty list
+    try:
+        res = searchEngine.search(query)
+    except Exception as e:
+        res = []
     return jsonify(res)
 
 @app.route("/search_body")
