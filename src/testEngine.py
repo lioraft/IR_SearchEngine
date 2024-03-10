@@ -45,7 +45,7 @@ def results_quality(true_list, predicted_list):
 
 def metrics():
     qs_res = []
-    with open('../tests/queries_train.json', 'rt') as f:
+    with open('tests/queries_train.json', 'rt') as f:
         queries = json.load(f)
     for q, true_wids in queries.items():
       duration, ap, rq = None, None, None
@@ -72,7 +72,7 @@ def metrics():
 
       qs_res.append((q, duration, rq, p5, p10, p30, ap, f1_30, r5, r10, r30))
 
-    with open('../tests/sample1.json', 'rt') as f:
+    with open('tests/sample1.json', 'rt') as f:
         queries = json.load(f)
     for q, true_wids in queries.items():
       duration, ap, rq = None, None, None
@@ -99,7 +99,7 @@ def metrics():
 
       qs_res.append((q, duration, rq, p5, p10, p30, ap, f1_30, r5, r10, r30))
 
-    with open('../tests/sample2.json', 'rt') as f:
+    with open('tests/sample2.json', 'rt') as f:
         queries = json.load(f)
     for q, true_wids in queries.items():
       duration, ap, rq = None, None, None
@@ -127,7 +127,7 @@ def metrics():
       qs_res.append((q, duration, rq, p5, p10, p30, ap, f1_30, r5, r10, r30))
 
     # write results to a csv file
-    with open('metrics/gcp_final_6title_2body_b03_2rank_100res.csv', 'wt') as f:
+    with open('metrics/finaltest_100res.csv', 'wt') as f:
         f.write('query,duration,rq,precision@5,precision@10,precision@30,average precision,f1@30,recall@5,recall@10,recall@30\n')
         for q, duration, rq, p5, p10, p30, ap, f1_30, r5, r10, r30 in qs_res:
             f.write(f'{q},{duration},{rq},{p5},{p10},{p30},{ap},{f1_30},{r5},{r10},{r30}\n')
