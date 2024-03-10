@@ -33,7 +33,7 @@ All the code files are written in python.
     - Implementing various search algorithms such as TF-IDF, BM25, and cosine similarity.
     - Combining search results from title and text indices, weighting them appropriately.
     - Adding page rank scores to the search results for relevance ranking.
-    - Resetting dictionaries after each search operation.
+    - Resetting temporary dictionaries of results after each search operation.
       
     **Dependencies**
       
