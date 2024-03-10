@@ -7,6 +7,7 @@ This project contains the implementation of a search engine that we built for IR
 - **initialization** - shell scripts for initializing clusters with the matching dependencies needed for computations.
 - **metrics** - detailed statistics for the experiments and major versions we created.
 - **tests** - contains test queries provided by course staff.
+- **src** - all code files for the implementation of the search engine.
 ## Code Files
 All the code files are written in python.
 - **inverted_index_gcp.py** - the implementation of the Inverted Index, which has the following features:
