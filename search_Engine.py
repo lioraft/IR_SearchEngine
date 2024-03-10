@@ -537,11 +537,11 @@ class searchEngine:
         # create a list of dictionaries
         dicts = [self.title_results, self.text_results]
         # create percentage list
-        p = [0.3, 0.6]
+        p = [0.6, 0.2]
         # combine the results of the two searches
         self.combineReulsts(dicts, p)
         # add page rank to the results
-        res = self.addPageRank(self.final_results, 0.1)
+        res = self.addPageRank(self.final_results, 0.2)
         # reset all dictionaries
         self.resetAfterSearch()
         # map each id to its title in tuples
