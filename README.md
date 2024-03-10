@@ -7,6 +7,7 @@ This project contains the implementation of a search engine that we built for IR
 - **initialization** - shell scripts for initializing clusters with the matching dependencies needed for computations.
 - **metrics** - detailed statistics for the experiments and major versions we created.
 - **tests** - contains test queries provided by course staff.
+- **src** - all code files for the implementation of the search engine.
 ## Code Files
 All the code files are written in python.
 - **inverted_index_gcp.py** - the implementation of the Inverted Index, which has the following features:
@@ -32,7 +33,7 @@ All the code files are written in python.
     - Implementing various search algorithms such as TF-IDF, BM25, and cosine similarity.
     - Combining search results from title and text indices, weighting them appropriately.
     - Adding page rank scores to the search results for relevance ranking.
-    - Resetting dictionaries after each search operation.
+    - Resetting temporary dictionaries of results after each search operation.
       
     **Dependencies**
       
