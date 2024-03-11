@@ -60,8 +60,6 @@ class searchEngine:
 
         #### gensim word2vec model ####
         self.word2vec = self.load_word2vec_from_bucket(bucket_name, "final_index/GoogleNews-vectors-negative300.bin.gz")
-        # local load - we used for pycharm, not for gcp instance
-        #self.word2vec = gensim.models.KeyedVectors.load('C:\\Users\\Lior\\Desktop\\Semester 5\\IR\\project related\\word2vec.model')
 
         #### saving results for current search ###
         self.title_results = {}
@@ -430,7 +428,7 @@ class searchEngine:
             DP_sim_docs[str(doc)] = dot_product
         return DP_sim_docs
 
-    def BM25(self, proc_query, b=0.5, k1=1.2, k3=1):
+    def BM25(self, proc_query, b=0.5, k1=2, k3=0):
         ''' This function returns up to a 100 of your best search results for the query.
         Parameters:
         -----------
@@ -591,7 +589,7 @@ class searchEngine:
         self.final_results = dict(sorted(self.final_results.items(), key=lambda item: item[1], reverse=True))
 
     # function for adding page rank to score
-    def addPageRank(self, sum_dict, p=0.1):
+    def addPageRank(self, sum_dict, pr=0.1):
         '''
         This function adds the page rank to the score of the documents and stores it in a dictionary.
         Parameters:
@@ -607,9 +605,9 @@ class searchEngine:
         '''
         # iterate over the items in the dictionary
         for k, v in sum_dict.items():
-            # if the key is not in the dict, add it
+            # if the key is in the pr dict, add it
             if int(k) in self.index.pr:
-                sum_dict[k] += self.index.pr[int(k)] * p
+                sum_dict[k] += self.index.pr[int(k)] * pr
         # sort the dict by value in descending order and store in final results
         return dict(sorted(sum_dict.items(), key=lambda item: item[1], reverse=True))
 
